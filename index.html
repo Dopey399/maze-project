@@ -2,9 +2,9 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Maze Flame</title>
+<title>Flame Maze</title>
 <style>
-body { margin:0; overflow:hidden; background:#000; }
+body { margin:0; overflow:hidden; background:#001522; }
 </style>
 </head>
 <body>
@@ -12,162 +12,172 @@ body { margin:0; overflow:hidden; background:#000; }
 <script type="module">
 
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js";
-import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/controls/OrbitControls.js";
 
-let scene = new THREE.Scene();
-scene.background = new THREE.Color(0x001d2e);
+//////////////////////
+// SCENE SETUP
+//////////////////////
 
-let camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1000);
-camera.position.set(0, 6, 10);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x002233);
 
-let renderer = new THREE.WebGLRenderer({ antialias:true });
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(0, 5, 8);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
-let controls = new OrbitControls(camera, renderer.domElement);
-controls.enablePan = false;
-controls.enableZoom = false;
+//////////////////////
+// LIGHTING
+//////////////////////
 
-let ambient = new THREE.AmbientLight(0xffffff, 0.6);
+const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
 
-let light = new THREE.PointLight(0xffaa33, 2);
-light.position.set(0,5,0);
-light.castShadow = true;
-scene.add(light);
+const pointLight = new THREE.PointLight(0xffaa33, 2);
+pointLight.position.set(0,5,0);
+scene.add(pointLight);
 
-const cellSize = 1;
-const wallHeight = 1.2;
+//////////////////////
+// MAZE GRID (NO IMAGE)
+//////////////////////
 
-let textureLoader = new THREE.TextureLoader();
+const maze = [
+[1,1,1,1,1,1,1,1],
+[1,0,0,0,0,0,0,1],
+[1,0,1,1,1,1,0,1],
+[1,0,1,0,0,1,0,1],
+[1,0,1,0,1,1,0,1],
+[1,0,0,0,0,0,0,1],
+[1,1,1,1,1,1,1,1]
+];
 
-// Sand texture
-let sandTexture = textureLoader.load(
-  "https://threejs.org/examples/textures/terrain/sand.jpg"
-);
-sandTexture.wrapS = sandTexture.wrapT = THREE.RepeatWrapping;
-sandTexture.repeat.set(50,50);
+const cellSize = 2;
+const wallHeight = 2;
 
-// Water texture for walls
-let waterTexture = textureLoader.load(
-  "https://threejs.org/examples/textures/water.jpg"
-);
-waterTexture.wrapS = waterTexture.wrapT = THREE.RepeatWrapping;
-waterTexture.repeat.set(1,1);
+//////////////////////
+// FLOOR (SAND COLOR)
+//////////////////////
 
-// Floor
-let floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(500,500),
-  new THREE.MeshStandardMaterial({ map:sandTexture })
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(100,100),
+  new THREE.MeshStandardMaterial({ color:0xd2b48c })
 );
 floor.rotation.x = -Math.PI/2;
-floor.receiveShadow = true;
 scene.add(floor);
 
-let player = new THREE.Group();
+//////////////////////
+// WALLS (OCEAN COLOR)
+//////////////////////
 
-let glass = new THREE.MeshPhysicalMaterial({
-    transmission: 1,
-    roughness: 0,
-    thickness: 0.5,
-    clearcoat: 1
+for(let z=0; z<maze.length; z++){
+  for(let x=0; x<maze[z].length; x++){
+    if(maze[z][x] === 1){
+
+      const wall = new THREE.Mesh(
+        new THREE.BoxGeometry(cellSize, wallHeight, cellSize),
+        new THREE.MeshStandardMaterial({ color:0x004f6e })
+      );
+
+      wall.position.set(
+        (x - maze[z].length/2) * cellSize,
+        wallHeight/2,
+        (z - maze.length/2) * cellSize
+      );
+
+      scene.add(wall);
+    }
+  }
+}
+
+//////////////////////
+// PLAYER
+//////////////////////
+
+const player = new THREE.Group();
+
+const glass = new THREE.MeshPhysicalMaterial({
+  transmission:1,
+  roughness:0,
+  thickness:0.5
 });
 
-let sphere = new THREE.Mesh(
-    new THREE.SphereGeometry(0.4,32,32),
-    glass
+const sphere = new THREE.Mesh(
+  new THREE.SphereGeometry(0.6,32,32),
+  glass
 );
-sphere.castShadow = true;
 
-let flame = new THREE.Mesh(
-    new THREE.SphereGeometry(0.2,16,16),
-    new THREE.MeshBasicMaterial({color:0xff5500})
+const flame = new THREE.Mesh(
+  new THREE.SphereGeometry(0.3,16,16),
+  new THREE.MeshBasicMaterial({ color:0xff5500 })
 );
 
 player.add(sphere);
 player.add(flame);
 scene.add(player);
 
-let move = {w:false,a:false,s:false,d:false};
-let clock = new THREE.Clock();
+// Start top-left
+player.position.set(
+  (-maze[0].length/2 + 1) * cellSize,
+  0.6,
+  (-maze.length/2 + 1) * cellSize
+);
 
-document.addEventListener("keydown",(e)=>{ if(move[e.key]!=undefined) move[e.key]=true; });
-document.addEventListener("keyup",(e)=>{ if(move[e.key]!=undefined) move[e.key]=false; });
+//////////////////////
+// CONTROLS
+//////////////////////
 
-function loadMaze(){
-    let img = new Image();
-    img.src = "maze.png";
+const keys = { w:false, a:false, s:false, d:false };
 
-    img.onload = function(){
+document.addEventListener("keydown", e => {
+  if(keys[e.key] !== undefined) keys[e.key] = true;
+});
 
-        let canvas = document.createElement("canvas");
-        let ctx = canvas.getContext("2d");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img,0,0);
+document.addEventListener("keyup", e => {
+  if(keys[e.key] !== undefined) keys[e.key] = false;
+});
 
-        let data = ctx.getImageData(0,0,img.width,img.height).data;
+//////////////////////
+// CAMERA FOLLOW
+//////////////////////
 
-        for(let y=0;y<img.height;y++){
-            for(let x=0;x<img.width;x++){
-                let i = (y*img.width+x)*4;
-                let r = data[i];
-
-                if(r > 150){
-
-                    let wall = new THREE.Mesh(
-                        new THREE.BoxGeometry(cellSize,wallHeight,cellSize),
-                        new THREE.MeshStandardMaterial({ map: waterTexture })
-                    );
-
-                    wall.position.set(
-                        x-img.width/2,
-                        wallHeight/2,
-                        y-img.height/2
-                    );
-
-                    wall.castShadow = true;
-                    wall.receiveShadow = true;
-
-                    scene.add(wall);
-                }
-            }
-        }
-
-        player.position.set(
-            -img.width/2+1,
-            0.4,
-            -img.height/2+1
-        );
-    };
+function updateCamera(){
+  const offset = new THREE.Vector3(0,4,6);
+  const targetPosition = player.position.clone().add(offset);
+  camera.position.lerp(targetPosition, 0.1);
+  camera.lookAt(player.position);
 }
+
+//////////////////////
+// ANIMATE
+//////////////////////
+
+const clock = new THREE.Clock();
 
 function animate(){
-    requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
 
-    let delta = clock.getDelta();
-    let speed = 3*delta;
+  const delta = clock.getDelta();
+  const speed = 4 * delta;
 
-    if(move.w) player.position.z -= speed;
-    if(move.s) player.position.z += speed;
-    if(move.a) player.position.x -= speed;
-    if(move.d) player.position.x += speed;
+  if(keys.w) player.position.z -= speed;
+  if(keys.s) player.position.z += speed;
+  if(keys.a) player.position.x -= speed;
+  if(keys.d) player.position.x += speed;
 
-    flame.scale.y = 1 + Math.sin(Date.now()*0.01)*0.2;
+  flame.scale.y = 1 + Math.sin(Date.now()*0.01)*0.2;
 
-    controls.target.copy(player.position);
+  updateCamera();
 
-    renderer.render(scene,camera);
+  renderer.render(scene, camera);
 }
 
-loadMaze();
 animate();
 
 window.addEventListener("resize",()=>{
-    camera.aspect = window.innerWidth/window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth,window.innerHeight);
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
 });
 
 </script>
