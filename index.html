@@ -13,14 +13,16 @@ body { margin:0; overflow:hidden; background:#000; }
 
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js";
 import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/controls/OrbitControls.js";
+
 let scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000814);
+scene.background = new THREE.Color(0x001d2e);
 
 let camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1000);
 camera.position.set(0, 6, 10);
 
 let renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
 let controls = new OrbitControls(camera, renderer.domElement);
@@ -32,10 +34,36 @@ scene.add(ambient);
 
 let light = new THREE.PointLight(0xffaa33, 2);
 light.position.set(0,5,0);
+light.castShadow = true;
 scene.add(light);
 
 const cellSize = 1;
 const wallHeight = 1.2;
+
+let textureLoader = new THREE.TextureLoader();
+
+// Sand texture
+let sandTexture = textureLoader.load(
+  "https://threejs.org/examples/textures/terrain/sand.jpg"
+);
+sandTexture.wrapS = sandTexture.wrapT = THREE.RepeatWrapping;
+sandTexture.repeat.set(50,50);
+
+// Water texture for walls
+let waterTexture = textureLoader.load(
+  "https://threejs.org/examples/textures/water.jpg"
+);
+waterTexture.wrapS = waterTexture.wrapT = THREE.RepeatWrapping;
+waterTexture.repeat.set(1,1);
+
+// Floor
+let floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(500,500),
+  new THREE.MeshStandardMaterial({ map:sandTexture })
+);
+floor.rotation.x = -Math.PI/2;
+floor.receiveShadow = true;
+scene.add(floor);
 
 let player = new THREE.Group();
 
@@ -50,6 +78,7 @@ let sphere = new THREE.Mesh(
     new THREE.SphereGeometry(0.4,32,32),
     glass
 );
+sphere.castShadow = true;
 
 let flame = new THREE.Mesh(
     new THREE.SphereGeometry(0.2,16,16),
@@ -68,11 +97,11 @@ document.addEventListener("keyup",(e)=>{ if(move[e.key]!=undefined) move[e.key]=
 
 function loadMaze(){
     let img = new Image();
-    img.crossOrigin = "anonymous";
     img.src = "maze.png";
-    
+
     img.onload = function(){
-console.log("Maze loaded", img.width, img.height);        let canvas = document.createElement("canvas");
+
+        let canvas = document.createElement("canvas");
         let ctx = canvas.getContext("2d");
         canvas.width = img.width;
         canvas.height = img.height;
@@ -86,9 +115,10 @@ console.log("Maze loaded", img.width, img.height);        let canvas = document.
                 let r = data[i];
 
                 if(r > 150){
+
                     let wall = new THREE.Mesh(
                         new THREE.BoxGeometry(cellSize,wallHeight,cellSize),
-                        new THREE.MeshStandardMaterial({color:0x1b263b})
+                        new THREE.MeshStandardMaterial({ map: waterTexture })
                     );
 
                     wall.position.set(
@@ -96,6 +126,9 @@ console.log("Maze loaded", img.width, img.height);        let canvas = document.
                         wallHeight/2,
                         y-img.height/2
                     );
+
+                    wall.castShadow = true;
+                    wall.receiveShadow = true;
 
                     scene.add(wall);
                 }
